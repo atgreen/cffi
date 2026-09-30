@@ -49,18 +49,26 @@ Two further notes on fidelity:
 
 ## Status
 
-CFFI's own suite runs on TorCL x86-64 Linux: **316 of 344 tests pass.** The 28
-that fail are TorCL conformance bugs, each filed with a reproducer, not gaps in
-this backend:
+CFFI's own suite runs on TorCL x86-64 Linux: **342 of 344 tests pass**, with two
+failures, neither of them a gap in this backend:
 
-| TorCL issue | Failing tests |
+| Failing test | Why |
 |---|---|
-| `bliss-nj6id` — `:argument-precedence-order` ignored when ordering methods | 13 (all `FSBV.*`, `STRUCT-VALUES.*`, `SET-AGGREGATE-STRUCT-SLOT`, `STRUCT.STRING.1`) |
-| `bliss-cb3c7` — `define-symbol-macro` through `eval` is invisible afterwards | 9 (`FOREIGN-GLOBALS` symbol-case and `SET.STRING`) |
-| `bliss-hfn71` — `deftype` not expanded in nested/aliasing type positions | 2 (`STRING.ENCODING*`) |
-| `bliss-jre1u` — `documentation` of a function is never recorded | 2 (`DEFCFUN.*DOCSTRING*`) |
-| `bliss-bpjw6` — `loop` leaves its iteration variable one short in `finally` | 1 (`FUNCALL.STRING.3`) |
-| `bliss-bd6r2` — `compile` does not macroexpand its lambda expression | 1 (`FUNCALL.NIL-SKIP`) |
+| `FUNCALL.NIL-SKIP` | TorCL's `COMPILE` does not macroexpand the lambda expression it is given, so the test cannot observe an argument translator running at expansion time (`bliss-bd6r2`). |
+| `STRING.ENCODINGS.ALL.BASIC` | Babel's `:ksc_5601` encoder calls `handle-error` outside the macrolet that defines it, and `utf8-to-ksc-5601` answers NIL even for ASCII. **This fails on SBCL too** with the same Babel release, so it is not a TorCL issue. |
+
+Getting there took seven TorCL conformance fixes, each found by a failing CFFI
+test and each checked against SBCL's answer for the same form:
+
+| TorCL issue | What it was | Tests it accounted for |
+|---|---|---|
+| `bliss-nj6id` | `:argument-precedence-order` was ignored, and method specificity summed the per-argument distances instead of comparing them one at a time | 13 — every `FSBV.*` and `STRUCT-VALUES.*` |
+| `bliss-cb3c7` | `define-symbol-macro` through `eval` was written into a table that was then discarded, so a `defcvar` made that way came back unbound | 9 |
+| `bliss-msyk` | a `setf` place was walked as an expression, so a compiler macro on the accessor rewrote it into something that was no longer a place | 2 |
+| `bliss-hfn71` | `deftype` was expanded only one level, and not at all in an element-type position | 2 |
+| `bliss-jre1u` | a `defun`/`defmacro` docstring was never recorded | 2 |
+| `bliss-06l4z` | `foreign-free` refused a tracked allocation reached through a pointer read back out of memory | 2 |
+| `bliss-bpjw6` | `loop` left its iteration variable one short in `finally`, so Babel's octet counters truncated every string encoded into a caller-sized buffer | 1 |
 
 The other `cffi*` systems load on TorCL unchanged: `cffi-grovel`,
 `cffi-toolchain` (the C compiler and linker it drives need no TorCL-specific
@@ -69,7 +77,7 @@ whose examples run, variadic `sprintf` and enum translation included.
 
 Foreign calls and callbacks are architecture-specific in TorCL: this backend is
 tested on x86-64 Linux, and dynamic library loading requires a dynamic TorCL
-build.
+build (`--features torcl-rt/c-ffi`).
 
 ## Running the tests
 
@@ -77,3 +85,14 @@ build.
 (asdf:load-system :cffi-tests)
 (asdf:test-system :cffi-tests)
 ```
+
+## Notes for whoever maintains this next
+
+- A signature's TorCL descriptors are cached by the signature itself, so
+  redefining a `defcstruct` after calling a function that takes it by value
+  leaves the old layout in the cache (`cffi::*torcl-call-plans*`). Upstream's
+  libffi path caches its `ffi_cif` per call site and has the same property.
+- Nothing here caches a *call site*, so a `defcfun` resolves its symbol on each
+  call through a name→pointer hash table that a `close-foreign-library` empties.
+  TorCL re-evaluates `load-time-value` on every call (bliss-jz86), so a
+  load-time cache would not have worked anyway.
