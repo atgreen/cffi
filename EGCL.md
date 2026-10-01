@@ -1,35 +1,35 @@
-# CFFI on TorCL
+# CFFI on EGCL
 
-This fork adds a CFFI-SYS backend for [TorCL](https://github.com/atgreen/torcl),
+This fork adds a CFFI-SYS backend for [EGCL](https://github.com/atgreen/evergreen),
 a Common Lisp implementation whose bootstrap system is written in Rust. Nothing
-outside the TorCL-conditional parts changes, so every other implementation
+outside the EGCL-conditional parts changes, so every other implementation
 behaves as it did upstream.
 
 | File | What it is |
 |---|---|
-| `src/cffi-torcl.lisp` | The CFFI-SYS backend: pointers, foreign memory, calls, callbacks, libraries |
-| `src/cffi-torcl-fsbv.lisp` | Structures by value, through TorCL's own ABI layer |
-| `cffi.asd` | Accepts `:torcl` and loads those two files |
-| `cffi-tests.asd` | Does not pull in `cffi-libffi` on TorCL |
+| `src/cffi-egcl.lisp` | The CFFI-SYS backend: pointers, foreign memory, calls, callbacks, libraries |
+| `src/cffi-egcl-fsbv.lisp` | Structures by value, through EGCL's own ABI layer |
+| `cffi.asd` | Accepts `:egcl` and loads those two files |
+| `cffi-tests.asd` | Does not pull in `cffi-libffi` on EGCL |
 
 ## How it calls C
 
-TorCL's foreign interface is the `TORCL-FFI` package. A call names its return
+EGCL's foreign interface is the `EGCL-FFI` package. A call names its return
 type, a list of argument types and a list of arguments — so this backend builds
 those lists instead of emitting a distinct alien stub per call site, the way the
 ECL backend's dynamic FFI path does. A variadic call also passes the number of
 fixed arguments, which the runtime needs to apply the ABI's rules to the
 variable part.
 
-Aggregates go through `TORCL-FFI:FOREIGN-CALL-BUFFERED`, which takes the address
+Aggregates go through `EGCL-FFI:FOREIGN-CALL-BUFFERED`, which takes the address
 of each argument and of the result, and applies the target ABI's aggregate rules
-itself. **TorCL therefore needs neither libffi nor a C compiler to pass or
-return a structure by value.** `cffi-libffi` does load on TorCL, and loading it
+itself. **EGCL therefore needs neither libffi nor a C compiler to pass or
+return a structure by value.** `cffi-libffi` does load on EGCL, and loading it
 replaces this native path with libffi's; there is no reason to on this
 implementation.
 
 The runtime lays a structure out from a description of its fields, so
-`src/cffi-torcl-fsbv.lisp` checks that description against the layout CFFI
+`src/cffi-egcl-fsbv.lisp` checks that description against the layout CFFI
 computed — same size, same alignment, same field offsets — and reports a
 structure it cannot describe rather than calling it. Padding fields are not
 invented to make offsets agree: that would change how the ABI classifies the
@@ -49,18 +49,18 @@ Two further notes on fidelity:
 
 ## Status
 
-CFFI's own suite runs on TorCL x86-64 Linux: **342 of 344 tests pass**, with two
+CFFI's own suite runs on EGCL x86-64 Linux: **342 of 344 tests pass**, with two
 failures, neither of them a gap in this backend:
 
 | Failing test | Why |
 |---|---|
-| `FUNCALL.NIL-SKIP` | TorCL's `COMPILE` does not macroexpand the lambda expression it is given, so the test cannot observe an argument translator running at expansion time (`bliss-bd6r2`). |
-| `STRING.ENCODINGS.ALL.BASIC` | Babel's `:ksc_5601` encoder calls `handle-error` outside the macrolet that defines it, and `utf8-to-ksc-5601` answers NIL even for ASCII. **This fails on SBCL too** with the same Babel release, so it is not a TorCL issue. |
+| `FUNCALL.NIL-SKIP` | EGCL's `COMPILE` does not macroexpand the lambda expression it is given, so the test cannot observe an argument translator running at expansion time (`bliss-bd6r2`). |
+| `STRING.ENCODINGS.ALL.BASIC` | Babel's `:ksc_5601` encoder calls `handle-error` outside the macrolet that defines it, and `utf8-to-ksc-5601` answers NIL even for ASCII. **This fails on SBCL too** with the same Babel release, so it is not an EGCL issue. |
 
-Getting there took seven TorCL conformance fixes, each found by a failing CFFI
+Getting there took seven EGCL conformance fixes, each found by a failing CFFI
 test and each checked against SBCL's answer for the same form:
 
-| TorCL issue | What it was | Tests it accounted for |
+| EGCL issue | What it was | Tests it accounted for |
 |---|---|---|
 | `bliss-nj6id` | `:argument-precedence-order` was ignored, and method specificity summed the per-argument distances instead of comparing them one at a time | 13 — every `FSBV.*` and `STRUCT-VALUES.*` |
 | `bliss-cb3c7` | `define-symbol-macro` through `eval` was written into a table that was then discarded, so a `defcvar` made that way came back unbound | 9 |
@@ -70,14 +70,14 @@ test and each checked against SBCL's answer for the same form:
 | `bliss-06l4z` | `foreign-free` refused a tracked allocation reached through a pointer read back out of memory | 2 |
 | `bliss-bpjw6` | `loop` left its iteration variable one short in `finally`, so Babel's octet counters truncated every string encoded into a caller-sized buffer | 1 |
 
-The other `cffi*` systems load on TorCL unchanged: `cffi-grovel`,
-`cffi-toolchain` (the C compiler and linker it drives need no TorCL-specific
+The other `cffi*` systems load on EGCL unchanged: `cffi-grovel`,
+`cffi-toolchain` (the C compiler and linker it drives need no EGCL-specific
 parameters), `cffi-libffi`, `cffi-uffi-compat`, `uffi` and `cffi-examples` —
 whose examples run, variadic `sprintf` and enum translation included.
 
-Foreign calls and callbacks are architecture-specific in TorCL: this backend is
-tested on x86-64 Linux, and dynamic library loading requires a dynamic TorCL
-build (`--features torcl-rt/c-ffi`).
+Foreign calls and callbacks are architecture-specific in EGCL: this backend is
+tested on x86-64 Linux, and dynamic library loading requires a dynamic EGCL
+build (`--features egcl-rt/c-ffi`).
 
 ## Running the tests
 
@@ -88,11 +88,11 @@ build (`--features torcl-rt/c-ffi`).
 
 ## Notes for whoever maintains this next
 
-- A signature's TorCL descriptors are cached by the signature itself, so
+- A signature's EGCL descriptors are cached by the signature itself, so
   redefining a `defcstruct` after calling a function that takes it by value
-  leaves the old layout in the cache (`cffi::*torcl-call-plans*`). Upstream's
+  leaves the old layout in the cache (`cffi::*egcl-call-plans*`). Upstream's
   libffi path caches its `ffi_cif` per call site and has the same property.
 - Nothing here caches a *call site*, so a `defcfun` resolves its symbol on each
   call through a name→pointer hash table that a `close-foreign-library` empties.
-  TorCL re-evaluates `load-time-value` on every call (bliss-jz86), so a
+  EGCL re-evaluates `load-time-value` on every call (bliss-jz86), so a
   load-time cache would not have worked anyway.

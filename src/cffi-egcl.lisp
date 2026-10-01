@@ -1,6 +1,6 @@
 ;;;; -*- Mode: lisp; indent-tabs-mode: nil -*-
 ;;;
-;;; cffi-torcl.lisp --- CFFI-SYS implementation for TorCL.
+;;; cffi-egcl.lisp --- CFFI-SYS implementation for EGCL.
 ;;;
 ;;; Copyright (C) 2026, Anthony Green  <green@moxielogic.com>
 ;;;
@@ -28,19 +28,19 @@
 (in-package #:cffi-sys)
 
 ;;;
-;;; TorCL's own foreign interface is TORCL-FFI.  Calls are made through
-;;; TORCL-FFI:FOREIGN-CALL, which takes the return type, a list of argument
+;;; EGCL's own foreign interface is EGCL-FFI.  Calls are made through
+;;; EGCL-FFI:FOREIGN-CALL, which takes the return type, a list of argument
 ;;; types and a list of arguments, so this backend builds those lists rather
 ;;; than emitting a distinct alien stub per call site.  A variadic call passes
 ;;; the number of fixed arguments so the runtime can apply the C ABI rules for
 ;;; the variable part.  Structures by value are not part of this file: they go
-;;; through TORCL-FFI:FOREIGN-CALL-BUFFERED, installed as CFFI's
-;;; *FOREIGN-STRUCTURES-BY-VALUE* hook in cffi-torcl-fsbv.lisp.
+;;; through EGCL-FFI:FOREIGN-CALL-BUFFERED, installed as CFFI's
+;;; *FOREIGN-STRUCTURES-BY-VALUE* hook in cffi-egcl-fsbv.lisp.
 ;;;
 
 ;;;# Mis-features
 ;;;
-;;; TorCL resolves a foreign symbol through the platform loader's default
+;;; EGCL resolves a foreign symbol through the platform loader's default
 ;;; scope, so a symbol is not tied to the library option of its call site.
 (pushnew 'flat-namespace *features*)
 
@@ -53,14 +53,14 @@
 
 ;;;# Foreign Types
 ;;;
-;;; The type keywords TorCL uses for a scalar are not all spelled the way
+;;; The type keywords EGCL uses for a scalar are not all spelled the way
 ;;; CFFI spells them, so translate explicitly instead of relying on names
 ;;; that happen to agree.  An unknown keyword is an error here rather than
 ;;; a call made with a type the runtime guessed at.
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (defun torcl-type (type)
-    "Return the TORCL-FFI type keyword for the canonical CFFI type TYPE."
+  (defun egcl-type (type)
+    "Return the EGCL-FFI type keyword for the canonical CFFI type TYPE."
     (case type
       (:char :char)
       (:unsigned-char :uchar)
@@ -76,74 +76,74 @@
       (:double :double)
       (:pointer :pointer)
       (:void :void)
-      (t (error "~S is not a foreign type TorCL can pass or store." type)))))
+      (t (error "~S is not a foreign type EGCL can pass or store." type)))))
 
 (defun %foreign-type-size (type)
   "Return the size in bytes of a foreign type."
-  (torcl-ffi:foreign-type-size (torcl-type type)))
+  (egcl-ffi:foreign-type-size (egcl-type type)))
 
 (defun %foreign-type-alignment (type)
   "Return the alignment in bytes of a foreign type."
-  (torcl-ffi:foreign-type-alignment (torcl-type type)))
+  (egcl-ffi:foreign-type-alignment (egcl-type type)))
 
 ;;;# Basic Pointer Operations
 
 (deftype foreign-pointer ()
-  ;; Name the predicate rather than aliasing TORCL-FFI:FOREIGN-POINTER: a
-  ;; type that only names another DEFTYPE is not recognised by TorCL's
+  ;; Name the predicate rather than aliasing EGCL-FFI:FOREIGN-POINTER: a
+  ;; type that only names another DEFTYPE is not recognised by EGCL's
   ;; TYPEP (bliss-hfn71).
   '(satisfies pointerp))
 
 (declaim (inline pointerp))
 (defun pointerp (ptr)
   "Return true if PTR is a foreign pointer."
-  (torcl-ffi:pointerp ptr))
+  (egcl-ffi:pointerp ptr))
 
 (declaim (inline pointer-eq))
 (defun pointer-eq (ptr1 ptr2)
   "Return true if PTR1 and PTR2 point to the same address."
-  (torcl-ffi:pointer-eq ptr1 ptr2))
+  (egcl-ffi:pointer-eq ptr1 ptr2))
 
 (declaim (inline null-pointer))
 (defun null-pointer ()
   "Construct and return a null pointer."
-  (torcl-ffi:null-pointer))
+  (egcl-ffi:null-pointer))
 
 (declaim (inline null-pointer-p))
 (defun null-pointer-p (ptr)
   "Return true if PTR is a null pointer."
-  (torcl-ffi:null-pointer-p ptr))
+  (egcl-ffi:null-pointer-p ptr))
 
 (declaim (inline inc-pointer))
 (defun inc-pointer (ptr offset)
   "Return a pointer pointing OFFSET bytes past PTR."
-  (torcl-ffi:inc-pointer ptr offset))
+  (egcl-ffi:inc-pointer ptr offset))
 
 (declaim (inline make-pointer))
 (defun make-pointer (address)
   "Return a pointer pointing to ADDRESS."
-  (torcl-ffi:make-pointer address))
+  (egcl-ffi:make-pointer address))
 
 (declaim (inline pointer-address))
 (defun pointer-address (ptr)
   "Return the address pointed to by PTR."
-  (torcl-ffi:pointer-address ptr))
+  (egcl-ffi:pointer-address ptr))
 
 ;;;# Allocation
 ;;;
-;;; TorCL tracks the allocations it owns: freeing one invalidates every
+;;; EGCL tracks the allocations it owns: freeing one invalidates every
 ;;; pointer into it, and it bounds-checks accesses through them.  There is
 ;;; no foreign stack allocation, so WITH-FOREIGN-POINTER frees on exit.
 
 (declaim (inline %foreign-alloc))
 (defun %foreign-alloc (size)
   "Allocate SIZE bytes of foreign memory and return a pointer to it."
-  (torcl-ffi:foreign-alloc size))
+  (egcl-ffi:foreign-alloc size))
 
 (declaim (inline foreign-free))
 (defun foreign-free (ptr)
   "Free a pointer PTR allocated by %FOREIGN-ALLOC."
-  (torcl-ffi:foreign-free ptr))
+  (egcl-ffi:foreign-free ptr))
 
 (defmacro with-foreign-pointer ((var size &optional size-var) &body body)
   "Bind VAR to SIZE bytes of foreign memory during BODY.  The pointer
@@ -160,7 +160,7 @@ supplied, it will be bound to SIZE during BODY."
 
 ;;;# Shareable Vectors
 ;;;
-;;; TorCL does not pin a Lisp vector for C, so WITH-POINTER-TO-VECTOR-DATA
+;;; EGCL does not pin a Lisp vector for C, so WITH-POINTER-TO-VECTOR-DATA
 ;;; copies the elements into foreign storage and copies them back when BODY
 ;;; returns, including on a nonlocal exit.  The pointer is dead afterwards.
 
@@ -168,39 +168,39 @@ supplied, it will be bound to SIZE during BODY."
 (defun make-shareable-byte-vector (size)
   "Create a Lisp vector of SIZE bytes that can be passed to
 WITH-POINTER-TO-VECTOR-DATA."
-  ;; TorCL leaves an uninitialised specialised array full of NIL, which is
+  ;; EGCL leaves an uninitialised specialised array full of NIL, which is
   ;; not a byte the copy to foreign storage can marshal (bliss-ccta2).
   (make-array size :element-type '(unsigned-byte 8) :initial-element 0))
 
 (defmacro with-pointer-to-vector-data ((ptr-var vector) &body body)
   "Bind PTR-VAR to a foreign pointer to the data in VECTOR."
-  `(torcl-ffi:with-pointer-to-vector-data (,ptr-var ,vector :unsigned-char)
+  `(egcl-ffi:with-pointer-to-vector-data (,ptr-var ,vector :unsigned-char)
      ,@body))
 
 ;;;# Dereferencing
 
 (defun %mem-ref (ptr type &optional (offset 0))
   "Dereference an object of TYPE OFFSET bytes from PTR."
-  (torcl-ffi:mem-ref ptr (torcl-type type) offset))
+  (egcl-ffi:mem-ref ptr (egcl-type type) offset))
 
 (defun %mem-set (value ptr type &optional (offset 0))
   "Set an object of TYPE OFFSET bytes from PTR to VALUE."
-  (torcl-ffi:mem-set value ptr (torcl-type type) offset)
+  (egcl-ffi:mem-set value ptr (egcl-type type) offset)
   value)
 
-;;; When the type is known at compile time, name the TorCL type then
+;;; When the type is known at compile time, name the EGCL type then
 ;;; instead of on every access.
 (define-compiler-macro %mem-ref (&whole form ptr type &optional (offset 0))
   (if (constant-form-p type)
-      `(torcl-ffi:mem-ref ,ptr ,(torcl-type (constant-form-value type)) ,offset)
+      `(egcl-ffi:mem-ref ,ptr ,(egcl-type (constant-form-value type)) ,offset)
       form))
 
 (define-compiler-macro %mem-set (&whole form value ptr type &optional (offset 0))
   (if (constant-form-p type)
       (once-only (value)
         `(progn
-           (torcl-ffi:mem-set ,value ,ptr
-                              ,(torcl-type (constant-form-value type))
+           (egcl-ffi:mem-set ,value ,ptr
+                              ,(egcl-type (constant-form-value type))
                               ,offset)
            ,value))
       form))
@@ -218,8 +218,8 @@ WITH-POINTER-TO-VECTOR-DATA."
 (defun %foreign-symbol-pointer (name library)
   "Returns a pointer to a foreign symbol NAME, or NIL if it is not found."
   (let ((scope (unless (or (null library) (eq library :default)) library)))
-    (handler-case (torcl-ffi:foreign-symbol-pointer name scope)
-      (torcl-ffi:ffi-error () nil))))
+    (handler-case (egcl-ffi:foreign-symbol-pointer name scope)
+      (egcl-ffi:ffi-error () nil))))
 
 (defun foreign-function-pointer (name)
   "Return a pointer to the foreign function NAME, signalling an error if
@@ -237,8 +237,8 @@ no such symbol is defined."
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defun foreign-funcall-parse-args (args)
-    "Return three values: the TorCL argument types, the argument forms and
-the TorCL return type of the call described by ARGS."
+    "Return three values: the EGCL argument types, the argument forms and
+the EGCL return type of the call described by ARGS."
     (let ((return-type :void)
           (types '())
           (values '()))
@@ -246,22 +246,22 @@ the TorCL return type of the call described by ARGS."
       ;; other element is a type paired with the form for its argument.
       (loop for rest on args by #'cddr
             do (if (cdr rest)
-                   (progn (push (torcl-type (first rest)) types)
+                   (progn (push (egcl-type (first rest)) types)
                           (push (second rest) values))
-                   (setf return-type (torcl-type (first rest)))))
+                   (setf return-type (egcl-type (first rest)))))
       (values (nreverse types) (nreverse values) return-type)))
 
   (defun check-calling-convention (convention)
-    "TorCL's targets have a single C calling convention."
+    "EGCL's targets have a single C calling convention."
     (unless (member convention '(nil :cdecl :default))
-      (error "TorCL does not support the ~S calling convention." convention))))
+      (error "EGCL does not support the ~S calling convention." convention))))
 
 ;;; A call form: the function pointer comes either from a symbol name or
 ;;; from a pointer the caller already has.
 (defmacro %%foreign-funcall (function-form args &optional fixed-count)
   (multiple-value-bind (types values return-type)
       (foreign-funcall-parse-args args)
-    (let ((call `(torcl-ffi:foreign-call ,function-form ,return-type ',types
+    (let ((call `(egcl-ffi:foreign-call ,function-form ,return-type ',types
                                          (list ,@values)
                                          ,@(when fixed-count
                                              (list fixed-count)))))
@@ -310,7 +310,7 @@ the TorCL return type of the call described by ARGS."
   "Callback name -> the Lisp function that name currently stands for.")
 
 (defvar *callbacks* (make-hash-table :test 'eq)
-  "Callback name -> (TorCL callback . signature) serving that name.")
+  "Callback name -> (EGCL callback . signature) serving that name.")
 
 (defun %register-callback (name trampoline return-type argument-types)
   "Ensure NAME has a foreign entry with the given signature, and return it.
@@ -323,10 +323,10 @@ function, so a redefinition does not need a new entry."
         ;; A previous entry with a different signature is deliberately not
         ;; freed: C may still call it, and its Lisp side now errors.
         (car (setf (gethash name *callbacks*)
-                   (cons (torcl-ffi:make-callback
+                   (cons (egcl-ffi:make-callback
                           trampoline
-                          (torcl-type return-type)
-                          (mapcar #'torcl-type argument-types))
+                          (egcl-type return-type)
+                          (mapcar #'egcl-type argument-types))
                          signature))))))
 
 (defmacro %defcallback (name return-type arg-names arg-types body
@@ -347,7 +347,7 @@ function, so a redefinition does not need a new entry."
   (let ((callback (car (gethash name *callbacks*))))
     (unless callback
       (error "Undefined callback: ~S" name))
-    (torcl-ffi:callback-pointer callback)))
+    (egcl-ffi:callback-pointer callback)))
 
 ;;;# Loading and Closing Foreign Libraries
 
@@ -355,12 +355,12 @@ function, so a redefinition does not need a new entry."
   "Load a foreign library from PATH and return its handle."
   (declare (ignore name))
   (clrhash *symbol-pointer-cache*)
-  (torcl-ffi:load-foreign-library path))
+  (egcl-ffi:load-foreign-library path))
 
 (defun %close-foreign-library (handle)
   "Close a foreign library, invalidating pointers to its symbols."
   (clrhash *symbol-pointer-cache*)
-  (torcl-ffi:close-foreign-library handle))
+  (egcl-ffi:close-foreign-library handle))
 
 (defun native-namestring (pathname)
   (namestring pathname))

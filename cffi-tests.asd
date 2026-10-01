@@ -52,9 +52,9 @@
 
 (defsystem "cffi-tests"
   :description "Unit tests for CFFI."
-  ;; TorCL calls structures by value through its own ABI layer, so the
+  ;; EGCL calls structures by value through its own ABI layer, so the
   ;; suite exercises that instead of linking libffi.
-  :depends-on ("uiop" "cffi-grovel" #-torcl "cffi-libffi" "bordeaux-threads" #-ecl "rt" #+ecl (:require "rt"))
+  :depends-on ("uiop" "cffi-grovel" #-egcl "cffi-libffi" "bordeaux-threads" #-ecl "rt" #+ecl (:require "rt"))
   :components
   ((:module "tests"
     :components

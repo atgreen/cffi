@@ -28,7 +28,7 @@
 
 (in-package :asdf)
 
-#-(or openmcl mcl sbcl cmucl scl clisp lispworks ecl allegro cormanlisp abcl mkcl clasp cl-amiga torcl)
+#-(or openmcl mcl sbcl cmucl scl clisp lispworks ecl allegro cormanlisp abcl mkcl clasp cl-amiga egcl)
 (error "Sorry, this Lisp is not yet supported.  Patches welcome!")
 
 (defsystem "cffi"
@@ -61,7 +61,7 @@
      (:file "cffi-abcl" :if-feature :abcl)
      (:file "cffi-mkcl" :if-feature :mkcl)
      (:file "cffi-clasp" :if-feature :clasp)
-     (:file "cffi-torcl" :if-feature :torcl)
+     (:file "cffi-egcl" :if-feature :egcl)
      (:file "cffi-clamiga" :if-feature :cl-amiga)
      (:file "utils")
      (:file "darwin-frameworks" :if-feature :darwin)
@@ -72,9 +72,9 @@
      (:file "strings")
      (:file "structures")
      (:file "functions")
-     ;; TorCL calls aggregates through its own ABI layer, so it needs
+     ;; EGCL calls aggregates through its own ABI layer, so it needs
      ;; neither libffi nor a C compiler for structures by value.
-     (:file "cffi-torcl-fsbv" :if-feature :torcl)
+     (:file "cffi-egcl-fsbv" :if-feature :egcl)
      (:file "foreign-vars")
      (:file "features")))))
 
